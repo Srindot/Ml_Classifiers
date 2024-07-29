@@ -1,211 +1,125 @@
-from sklearn.datasets import fetch_openml
-from sklearn.linear_model import SGDClassifier
-from sklearn.model_selection import cross_val_score
-import matplotlib as mp 
-import matplotlib.pyplot as plt
+
 import numpy as np
-from sklearn.model_selection import StratifiedKFold
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression, SGDRegressor, Ridge, Lasso, ElasticNet, LogisticRegression
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.base import clone
-from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import cross_val_predict
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import precision_score, recall_score
-from sklearn.metrics import f1_score
-from sklearn.metrics import precision_recall_curve
-from sklearn.metrics import roc_curve
-from sklearn.metrics import roc_auc_score
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.multiclass import OneVsOneClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import KNeighborsClassifier
-
-mnist = fetch_openml('mnist_784', version=1, as_frame = False)
-print(mnist.keys())
-X, y = mnist["data"], mnist["target"]
-print(X.shape)
-print(y.shape)
-print("********************************")
-# Select a digit and reshape it for visualization
-# Select a digit and reshape it for visualization
-some_digit = X[0]
-some_digit_image = some_digit.reshape(28, 28)
-
-# Plot the digit
-# plt.imshow(some_digit_image, cmap='binary', interpolation='nearest')
-# plt.axis("off")
-# plt.show()
+from sklearn import datasets
 
 
-y = y.astype(np.uint8)
-X_train, X_test, y_train, y_test = X[:60000], X[60000:], y[:60000], y[60000:]
+X = 2 * np.random.rand(100, 1)
+y = 4 + 3 * X + np.random.randn(100, 1)
 
-#training a binary classifier 
-y_train_5 = (y_train == 5)
-y_test_5 = (y_test == 5)
-sgd_clf = SGDClassifier(random_state=42)
-sgd_clf.fit(X_train, y_train_5)
-# print(sgd_clf.predict([some_digit]))
+plt.scatter(X, y)
+plt.grid()
+plt.xlabel("X1")
+plt.ylabel("y")
+plt.show() 
 
-print("******************************************************************")
+X_b = np.c_[np.ones((100, 1)), X]
+theta_best = np.linalg.inv(X_b.T.dot(X_b)).dot(X_b.T).dot(y)
+print("The best values are ", theta_best)
 
-# skfolds = StratifiedKFold(n_splits=3)
-# print(cross_val_score(sgd_clf, X_train, y_train_5, cv=3, scoring="accuracy"))
+X_new = np.array([[0], [2]])
+X_new_b = np.c_[np.ones((2, 1)), X_new]
+y_predict = X_new_b.dot(theta_best)
 
-print("******************************************************************")
-y_train_pred = cross_val_predict(sgd_clf, X_train, y_train_5, cv=3)
-confmatrix = confusion_matrix(y_train_5, y_train_pred)
-print("Confusion Matrix = ", confmatrix)
+plt.plot(X_new, y_predict, "r-")
+plt.scatter(X, y)
+plt.grid()
+plt.xlabel("X1")
+plt.ylabel("y")
+plt.show()  
 
-print("******************************************************************")
+print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 
-precisionRatio=precision_score(y_train_5, y_train_pred)
-recallRatio=recall_score(y_train_5, y_train_pred)
-print("precision ration = ", precisionRatio)
-print("recallratio = ", recallRatio) 
 
-print("******************************************************************")
-f1score = f1_score(y_train_5, y_train_pred)
-print("f1score = ", f1score)
+lin_reg = LinearRegression()
+lin_reg.fit(X, y)
+print(lin_reg.intercept_, lin_reg.coef_)
+print(lin_reg.predict(X_new))
 
-print("******************************************************************")
+print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 
-y_scores = sgd_clf.decision_function([some_digit])
-print("score Without any threshold = ", y_scores)
+eta = 0.1  
+n_iterations = 1000
+m = 100
+theta = np.random.randn(2, 1)  
+for iteration in range(n_iterations):
+    gradients = 2 / m * X_b.T.dot(X_b.dot(theta) - y)
+    theta = theta - eta * gradients
+print(theta)
 
-threshold = 0
-y_some_digits_pred = (y_scores > threshold)
-print("score when the threshold is zero = ",y_some_digits_pred)
+n_epochs = 50
+t0, t1 = 5, 50  
 
-print("******************************************************************")
+def learning_schedule(t):
+    return t0 / (t + t1)
 
-y_scores = cross_val_predict(sgd_clf, X_train, y_train_5, cv=3,method="decision_function")
-print("score using cross validiation  = ",y_scores)
+theta = np.random.randn(2, 1)  
+for epoch in range(n_epochs):
+    for i in range(m):
+        random_index = np.random.randint(m)
+        xi = X_b[random_index:random_index + 1]
+        yi = y[random_index:random_index + 1]
+        gradients = 2 * xi.T.dot(xi.dot(theta) - yi)
+        eta = learning_schedule(epoch * m + i)
+        theta = theta - eta * gradients
+print(theta)
 
-print("******************************************************************")
+sgd_reg = SGDRegressor(max_iter=1000, tol=1e-3, penalty=None, eta0=0.1)
+sgd_reg.fit(X, y.ravel())
+print(sgd_reg.intercept_, sgd_reg.coef_)
 
-precisions, recalls, threshold = precision_recall_curve(y_train_5, y_scores)
-
-#definin a function 
-def plot_precision_recall_vs_threshold(precisions, recalls, thresholds):
-    plt.plot(thresholds, precisions[:-1], "b--", label= "Precision")
-    plt.plot(thresholds, recalls[:-1],"g-", label = "Recall")
-    plt.title("Precision and Recall Versus the decsion threshold")
-    plt.xlabel("Threshold")
-    plt.grid()
+def plot_learning_curves(model, X, y):
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2)
+    train_errors, val_errors = [], []
+    for m in range(1, len(X_train)):
+        model.fit(X_train[:m], y_train[:m])
+        y_train_predict = model.predict(X_train[:m])
+        y_val_predict = model.predict(X_val)
+        train_errors.append(mean_squared_error(y_train[:m], y_train_predict))
+        val_errors.append(mean_squared_error(y_val, y_val_predict))
+    plt.plot(np.sqrt(train_errors), "r-+", linewidth=2, label="train")
+    plt.plot(np.sqrt(val_errors), "b-", linewidth=3, label="val")
+    plt.legend()  
     plt.show()
-#plot_precision_recall_vs_threshold(precisions, recalls, threshold)
 
-print("******************************************************************")
-threshold_90_precision = threshold[np.argmax(precisions >= 0.90)]
-y_train_pred_90 = (y_scores >= threshold_90_precision)
-scoreCustomThreshold = precision_score(y_train_5, y_train_pred_90)
-print("scoreCustomThreshold = ",scoreCustomThreshold)
-print("******************************************************************")
-# fpr, tpr, thresholds = roc_curve(y_train_5, y_scores)
-def plot_roc_curve(fpr, tpr, label = None):
-    plt.plot(fpr, tpr, linewidth = 2, label = label)
-    plt.plot([0,1],[0,1], 'k--')
-    plt.ylabel("True positive Rate (Recall) ")
-    plt.xlabel("False Positive Rate")
-    plt.grid()
-    plt.show()
-# plot_roc_curve(fpr, tpr)
+lin_reg = LinearRegression()
+plot_learning_curves(lin_reg, X, y)
 
-print("******************************************************************")
-areaundercurve = roc_auc_score(y_train_5, y_scores)
-print("areaundercurve = ", areaundercurve)
+ridge_reg = Ridge(alpha=1, solver="cholesky")
+ridge_reg.fit(X, y)
+print(ridge_reg.predict([[1.5]]))
 
-print("******************************************************************")
-forest_clf = RandomForestClassifier(random_state=42)
-y_probas_forest = cross_val_predict(forest_clf, X_train, y_train_5, cv=3, method="predict_proba")
-y_scores_forest = y_probas_forest[:, 1]
-# score = proba of positive class
-# fpr_forest, tpr_forest, thresholds_forest = roc_curve(y_train_5,y_scores_forest)
-# plt.plot(fpr, tpr, "b:", label="SGD")
-# plot_roc_curve(fpr_forest, tpr_forest, "Random Forest")
-# plt.legend(loc="lower right")
 
-print("******************************************************************")
-randomforestscore = roc_auc_score(y_train_5, y_scores_forest)
-print("randomforestscore = ", randomforestscore)
+lasso_reg = Lasso(alpha=0.1)
+lasso_reg.fit(X, y)
+print(lasso_reg.predict([[1.5]]))
 
-print("******************************************************************")
-#multiclass Classification
-sgd_clf.fit(X_train, y_train)
-print(sgd_clf.predict([some_digit]))
-some_digit_scores = sgd_clf.decision_function([some_digit])
-print("some_digit_scores = ",some_digit_scores)
+elastic_net = ElasticNet(alpha=0.1, l1_ratio=0.5)
+elastic_net.fit(X, y)
+print(elastic_net.predict([[1.5]]))
 
-print("******************************************************************")
-ovo_clf = OneVsOneClassifier(SGDClassifier(random_state=42))
-ovo_clf.fit(X_train, y_train)
-print(ovo_clf.predict([some_digit]))
 
-print("******************************************************************")
-forest_clf.fit(X_train, y_train)
-print(forest_clf.predict([some_digit]))
 
-print("******************************************************************")
-cross_val_score(sgd_clf, X_train, y_train, cv=3, scoring="accuracy")
+iris = datasets.load_iris()
+print(list(iris.keys()))
+X = iris["data"][:, 3:]
+y = (iris["target"] == 2).astype(np.int32)  
+log_reg = LogisticRegression()
+log_reg.fit(X, y)
 
-print("******************************************************************")
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train.astype(np.float64))
-score = cross_val_score(sgd_clf,X_train_scaled, y_train, cv = 3, scoring = "accuracy")
-print("score of sdg on cross validation = ", score)
+X_new = np.linspace(0, 3, 1000).reshape(-1, 1)
+y_proba = log_reg.predict_proba(X_new)
 
-print("******************************************************************")
-#Error Analysis
-y_train_pred = cross_val_predict(sgd_clf, X_train_scaled, y_train, cv=3)
-conf_mx = confusion_matrix(y_train, y_train_pred)
-print("Confusion Matrix is ", conf_mx)
 
-#image respresentation 
-plt.matshow(conf_mx, cmap = plt.cm.gray)
+plt.plot(X_new, y_proba[:, 1], "g-", label="Iris-Virginica")
+plt.plot(X_new, y_proba[:, 0], "b--", label="Not Iris-Virginica")
+plt.legend() 
 plt.show()
 
-print("******************************************************************")
-row_sums = conf_mx.sum(axis=1, keepdims=True)
-norm_conf_mx = conf_mx / row_sums
-np.fill_diagonal(norm_conf_mx, 0)
-plt.matshow(norm_conf_mx, cmap=plt.cm.gray)
-plt.show()
-
-
-print("******************************************************************")
-
-# cl_a, cl_b = 3, 5
-# X_aa = X_train[(y_train == cl_a) & (y_train_pred == cl_a)]
-# X_ab = X_train[(y_train == cl_a) & (y_train_pred == cl_b)]
-# X_ba = X_train[(y_train == cl_b) & (y_train_pred == cl_a)]
-# X_bb = X_train[(y_train == cl_b) & (y_train_pred == cl_b)]
-# plt.figure(figsize=(8,8))
-# plt.subplot(221); plot_digits(X_aa[:25], images_per_row=5)
-# plt.subplot(222); plot_digits(X_ab[:25], images_per_row=5)
-# plt.subplot(223); plot_digits(X_ba[:25], images_per_row=5)
-# plt.subplot(224); plot_digits(X_bb[:25], images_per_row=5)
-# plt.show()
-
-print("******************************************************************")
-y_train_large = (y_train >= 7)
-y_train_odd = (y_train % 2 == 1)
-y_multilabel = np.c_[y_train_large, y_train_odd]
-knn_clf = KNeighborsClassifier()
-knn_clf.fit(X_train, y_multilabel)
-print(knn_clf.predict([some_digit]))
-y_train_knn_pred = cross_val_predict(knn_clf, X_train, y_multilabel, cv=3)
-f1score = f1_score(y_multilabel, y_train_knn_pred, average="macro")
-print("f1score of multilabel = ",f1score)
-
-print("******************************************************************")
-
-noise = np.random.randint(0, 100, (len(X_train), 784))
-X_train_mod = X_train + noise
-noise = np.random.randint(0, 100, (len(X_test), 784))
-X_test_mod = X_test + noise
-y_train_mod = X_train
-y_test_mod = X_test
-# knn_clf.fit(X_train_mod, y_train_mod)
-# clean_digit = knn_clf.predict([X_test_mod[some_index]])
-# plot_digit(clean_digit)
-print("******************************************************************")
+print(log_reg.predict([[1.7], [1.5]]))
